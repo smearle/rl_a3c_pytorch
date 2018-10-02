@@ -1,4 +1,6 @@
 
+This is a hack of https://github.com/dgriff777/rl_a3c_pytorch, extended slightly and with new network models intended specifically for micropolis. Work ongoing. Original readme copied below.
+
 [23]: https://github.com/dgriff777/a3c_continuous
 
 ## NEWLY ADDED A3G A NEW GPU/CPU ARCHITECTURE OF A3C FOR SUBSTANTIALLY ACCELERATED TRAINING!!
