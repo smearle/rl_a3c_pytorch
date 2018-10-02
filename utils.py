@@ -31,14 +31,25 @@ def norm_col_init(weights, std=1.0):
 
 
 def ensure_shared_grads(model, shared_model, gpu=False):
-    for param, shared_param in zip(model.parameters(),
-                                   shared_model.parameters()):
+    i = 0
+    missing_grads = 0
+    for param, shared_param in zip(model.parameters(), shared_model.parameters()):
+  #     print(param) 
+        i+= 1
         if shared_param.grad is not None and not gpu:
             return
         elif not gpu:
             shared_param._grad = param.grad
+      # else:
+      #     try:
+      #         len(param.grad) == None
+      #         print(len(param), len(shared_param), param.shape)
+      #     except TypeError:
+      #         missing_grads += 1
+      #         print('missing grad, params number {} of size {}'.format(i, (len(param), len(shared_param))))
         else:
             shared_param._grad = param.grad.cpu()
+   #print('missing {} gradients'.format(missing_grads))
 
 
 def weights_init(m):

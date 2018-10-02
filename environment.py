@@ -9,6 +9,27 @@ from cv2 import resize
 #from scipy.misc import imresize as resize
 import random
 
+def micropolis_env(env_id, env_conf, args):
+    import os
+    dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    micro_path = os.path.abspath(os.path.join(dir_path, os.pardir))
+    micro_path = os.path.abspath(os.path.join(micro_path, 'gym-micropolis'))
+    print(micro_path)
+    import sys
+    sys.path.insert(0, micro_path)
+    print(sys.path)
+    import gym_micropolis
+    env = gym.make(env_id)
+#  else:
+#       env._max_episode_steps = args.max_episode_length
+    env = EpisodicLifeEnv(env)
+#   if 'FIRE' in env.unwrapped.get_action_meanings():
+#       env = FireResetEnv(env)
+    env._max_episode_steps = args.max_episode_length
+#   env = AtariRescale(env, env_conf)
+    env = NormalizedEnv(env)
+    return env
+
 
 def atari_env(env_id, env_conf, args):
     env = gym.make(env_id)
@@ -52,6 +73,7 @@ class AtariRescale(gym.ObservationWrapper):
 class NormalizedEnv(gym.ObservationWrapper):
     def __init__(self, env=None):
         gym.ObservationWrapper.__init__(self, env)
+        self.env = env
         self.state_mean = 0
         self.state_std = 0
         self.alpha = 0.9999
@@ -59,6 +81,9 @@ class NormalizedEnv(gym.ObservationWrapper):
 
     def observation(self, observation):
         self.num_steps += 1
+        return observation
+    # Do not normalize for micropolis because we are tracking population;
+    # when this shoots up, it will shrink zoneMap features
         self.state_mean = self.state_mean * self.alpha + \
             observation.mean() * (1 - self.alpha)
         self.state_std = self.state_std * self.alpha + \
@@ -126,8 +151,9 @@ class EpisodicLifeEnv(gym.Wrapper):
         """Make end-of-life == end-of-episode, but only reset on true game over.
         Done by DeepMind for the DQN and co. since it helps value estimation.
         """
+        self.env = env
         gym.Wrapper.__init__(self, env)
-        self.lives = 0
+   #    self.lives = 0
         self.was_real_done = True
 
     def step(self, action):
@@ -135,13 +161,13 @@ class EpisodicLifeEnv(gym.Wrapper):
         self.was_real_done = done
         # check current lives, make loss of life terminal,
         # then update lives to handle bonus lives
-        lives = self.env.unwrapped.ale.lives()
-        if lives < self.lives and lives > 0:
+#       lives = self.env.unwrapped.ale.lives()
+#       if lives < self.lives and lives > 0:
             # for Qbert sometimes we stay in lives == 0 condtion for a few frames
             # so its important to keep lives > 0, so that we only reset once
             # the environment advertises done.
-            done = True
-        self.lives = lives
+#           done = True
+#       self.lives = lives
         return obs, reward, done, self.was_real_done
 
     def reset(self, **kwargs):
@@ -154,7 +180,7 @@ class EpisodicLifeEnv(gym.Wrapper):
         else:
             # no-op step to advance from terminal/lost life state
             obs, _, _, _ = self.env.step(0)
-        self.lives = self.env.unwrapped.ale.lives()
+#       self.lives = self.env.unwrapped.ale.lives()
         return obs
 
 

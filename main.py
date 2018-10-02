@@ -4,9 +4,9 @@ os.environ["OMP_NUM_THREADS"] = "1"
 import argparse
 import torch
 import torch.multiprocessing as mp
-from environment import atari_env
+from environment import atari_env, micropolis_env
 from utils import read_config
-from model import A3Clstm
+import model
 from train import train
 from test import test
 from shared_optim import SharedRMSprop, SharedAdam
@@ -110,9 +110,40 @@ parser.add_argument(
 parser.add_argument(
     '--skip-rate',
     type=int,
-    default=4,
+    default=0,
     metavar='SR',
-    help='frame skip rate (default: 4)')
+    help='frame skip rate (default: 0)')
+######################################### Micropolis
+parser.add_argument(
+        '--design-head',
+        default='A3Cmicropolis',
+        metavar='DH',
+        help='network architecture to load from model.py')
+parser.add_argument(
+        '--randomize-exploration',
+        default=False,
+        metavar='DE',
+        help='randomize exploration policies between training threads \
+                (by changing the varianve of the distribution over actions)')
+########################################### ICM
+parser.add_argument(
+    '--eta', 
+    type=float, 
+    default=0.01, 
+    metavar='LR',            
+    help='scaling factor for intrinsic reward')
+parser.add_argument(
+    '--beta', 
+    type=float, 
+    default=0.2,
+    metavar='LR',
+    help='balance between inverse & forward')
+parser.add_argument(
+    '--lmbda', 
+    type=float, 
+    default=0.1,
+    metavar='LR',
+    help='lambda : balance between A3C & icm')
 
 # Based on
 # https://github.com/pytorch/examples/tree/master/mnist_hogwild
@@ -121,6 +152,7 @@ parser.add_argument(
 # training was far superior
 
 if __name__ == '__main__':
+    __spec__ = None
     args = parser.parse_args()
     torch.manual_seed(args.seed)
     if args.gpu_ids == -1:
@@ -133,8 +165,14 @@ if __name__ == '__main__':
     for i in setup_json.keys():
         if i in args.env:
             env_conf = setup_json[i]
-    env = atari_env(args.env, env_conf, args)
-    shared_model = A3Clstm(env.observation_space.shape[0], env.action_space)
+    if 'micropolis' in args.env.lower():
+        env = micropolis_env(args.env, env_conf, args)
+        modelInit = getattr(model, args.design_head)
+        shared_model = modelInit(env.observation_space.shape[0], 
+                       env.action_space, env.env.env.MAP_X)
+    else:
+        env = atari_env(args.env, env_conf, args)
+        shared_model = A3Clstm(env.observation_space.shape[0], env.action_space)
     if args.load:
         saved_state = torch.load(
             '{0}{1}.dat'.format(args.load_model_dir, args.env),
@@ -151,6 +189,7 @@ if __name__ == '__main__':
         optimizer.share_memory()
     else:
         optimizer = None
+
 
     processes = []
 

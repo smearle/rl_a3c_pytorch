@@ -3,9 +3,9 @@ import os
 os.environ["OMP_NUM_THREADS"] = "1"
 import argparse
 import torch
-from environment import atari_env
+from environment import atari_env, micropolis_env
 from utils import read_config, setup_logger
-from model import A3Clstm
+import model
 from player_util import Agent
 import gym
 import logging
@@ -76,6 +76,13 @@ parser.add_argument(
     default=False,
     metavar='NGE',
     help='Create a gym evaluation for upload')
+######################################### Micropolis
+parser.add_argument(
+        '--design-head',
+        default='A3Cmicropolis',
+        metavar='DH',
+        help='network architecture to load from model.py')
+
 args = parser.parse_args()
 
 setup_json = read_config(args.env_config)
@@ -103,13 +110,21 @@ log['{}_mon_log'.format(args.env)] = logging.getLogger('{}_mon_log'.format(
 d_args = vars(args)
 for k in d_args.keys():
     log['{}_mon_log'.format(args.env)].info('{0}: {1}'.format(k, d_args[k]))
-
-env = atari_env("{}".format(args.env), env_conf, args)
+if 'micropolis' in args.env.lower():
+    env = micropolis_env("{}".format(args.env), env_conf, args)
+#else:
+#    env = atari_env("{}".format(args.env), env_conf, args)
 num_tests = 0
 start_time = time.time()
 reward_total_sum = 0
 player = Agent(None, env, args, None)
-player.model = A3Clstm(player.env.observation_space.shape[0],
+if 'micropolis' in args.env.lower():
+    modelInit = getattr(model, args.design_head)
+    player.model = modelInit(player.env.observation_space.shape[0],
+                                     player.env.action_space, player.env.env.env.MAP_X)
+    player.lstm_size = player.model.getMemorySizes()
+else:
+    player.model = A3Clstm(player.env.observation_space.shape[0],
                        player.env.action_space)
 player.gpu_id = gpu_id
 if gpu_id >= 0:
@@ -129,6 +144,7 @@ player.model.eval()
 for i_episode in range(args.num_episodes):
     player.state = player.env.reset()
     player.state = torch.from_numpy(player.state).float()
+
     if gpu_id >= 0:
         with torch.cuda.device(gpu_id):
             player.state = player.state.cuda()
@@ -139,7 +155,9 @@ for i_episode in range(args.num_episodes):
             if i_episode % args.render_freq == 0:
                 player.env.render()
 
+
         player.action_test()
+
         reward_sum += player.reward
 
         if player.done and not player.info:
@@ -160,4 +178,5 @@ for i_episode in range(args.num_episodes):
                                   time.gmtime(time.time() - start_time)),
                     reward_sum, player.eps_len, reward_mean))
             player.eps_len = 0
+           #gtk.main()
             break
